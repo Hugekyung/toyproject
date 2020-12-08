@@ -4,31 +4,17 @@ import re
 import pandas as pd
 import numpy as np
 
+# 앱스토어 유료 앱 top200 수집
+# https://itunes.apple.com/kr/rss/toppaidapplications/limit=200/json
+class Top_Paid_Spider(scrapy.Spider):
 
-# https://itunes.apple.com/kr/rss/topfreeapplications/genre={장르 코드}/limit={전체 개수}/json
-
-
-class Top_Free_Spider(scrapy.Spider):
-
-    name = "topfree"
+    name = "toppaid"
     allowed_domains = ["itunes.apple.com", "apps.apple.com"]
 
-    def __init__(self):
-        # 앱스토어 top_free 카테고리별 수집(총 20개 카테고리)
-        self.category_code_dic = {"Books" : '6018', "Business" : '6000', "Education" : '6017', "Entertainment" : '6018', "Finance" : '6015',
-                                "Food & Drink" : '6023', "Games" : '6014', "Health & Fitness" : '6013', "Lifestyle" : '6012', "Medical" : '6020',
-                                "Music" : '6011', "Navigation" : '6010', "News" : '6009', "Photo & Video": '6008', "Productivity" : '6007',
-                                "Social Networking" : '6005', "Sports" : '6004', "Travel" : '6003', "Utilities" : '6002', "Weather" : '6001'
-                                }
-
-
     def start_requests(self):
-        for key, value in self.category_code_dic.items():
-            category = key
-            category_code = value
-            start_url = 'https://itunes.apple.com/kr/rss/topfreeapplications/genre={}/limit=200/json'.format(category_code)
-            headers = {"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36"}
-            yield scrapy.Request(url=start_url, callback=self.get_apppage, headers=headers, meta={"category" : category})
+        start_url = 'https://itunes.apple.com/kr/rss/toppaidapplications/limit=200/json'
+        headers = {"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36"}
+        yield scrapy.Request(url=start_url, callback=self.get_apppage, headers=headers)
 
 
     def get_apppage(self, response):
@@ -43,11 +29,10 @@ class Top_Free_Spider(scrapy.Spider):
             release_year = entry['im:releaseDate']['label'] # 앱 출시연도
             release_year = release_year.split('-')[0]
             category_code = entry['category']['attributes']['im:id'] # 앱 카테고리 코드
-            category = response.meta['category']
             id_num = entry['id']['attributes']['im:id'] # 앱 id
             app_url = link+id_num # 애플 앱스토어 링크
-            yield scrapy.Request(url=link+id_num, callback=self.get_details, meta={"title" : title, "developer" : developer, "release_year" : release_year, "category_code" : category_code, "category" : category, "app_url" : app_url})
-            
+            yield scrapy.Request(url=link+id_num, callback=self.get_details, meta={"title" : title, "developer" : developer, "release_year" : release_year, "category_code" : category_code, "app_url" : app_url})
+        
 
     def get_details(self, response):
         title = response.meta['title']
@@ -70,22 +55,11 @@ class Top_Free_Spider(scrapy.Spider):
             app_size = None
 
         category_code = response.meta['category_code']
-        category = response.meta['category']
-
-        # 카테고리가 게임일 경우, 세부 장르 추출
-        try:
-            if category_code == '6014':
-                li_text = response.xpath('//li/text()').extract()
-                genre = [li for li in li_text if '위' in li][0]
-                genre = re.sub('(앱 [0-9]+위)', '', genre).strip()
-            else:
-                genre = None
-        except:
-            genre = None
+        category = response.xpath('//dd/a/text()')[0].extract().replace('\n', '').strip()
 
         # 앱 리뷰 개수: 정수형으로 추출
+        review_num = response.css('p.we-customer-ratings__count.medium-hide::text').get().replace('\n', '').strip()
         try:
-            review_num = response.css('p.we-customer-ratings__count.medium-hide::text').get().replace('\n', '').strip()
             review_number = re.sub('[가-힣]', '', review_num)
             review_unit = re.sub('[0-9.0-9]', '', review_num)
             review_unit = re.sub('개의 평가', '', review_unit)
@@ -96,14 +70,11 @@ class Top_Free_Spider(scrapy.Spider):
             else:
                 review_num = int(review_number)
         except:
-            review_num = None
+            pass
 
         # 앱 리뷰 평점(실수형)
-        try:
-            review_score = response.css('span.we-customer-ratings__averages__display::text').get().replace('\n', '').strip()
-            review_score = float(review_score)
-        except:
-            review_score = None
+        review_score = response.css('span.we-customer-ratings__averages__display::text').get().replace('\n', '').strip()
+        review_score = float(review_score)
 
         p_text = response.xpath('//p/text()').extract()
 
@@ -148,7 +119,6 @@ class Top_Free_Spider(scrapy.Spider):
             'app_size(MB)' : app_size,
             'category_code' : category_code,
             'category' : category,
-            'genre(Games)' : genre,
             'review_num' : review_num,
             'review_score' : review_score,
             'version' : version,
