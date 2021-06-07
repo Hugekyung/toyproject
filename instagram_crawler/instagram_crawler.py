@@ -113,15 +113,7 @@ class InstagramSpider(scrapy.Spider):
         print(f"크롤링 중 ~~ {self.requests_count} 번째 리퀘스트 진행 중..")
 
         # end_cursor 추출
-        try:
-            end_cursor = res['data']["user"]["edge_owner_to_timeline_media"]["page_info"]["end_cursor"][:-2]
-            print('=======================================')
-            print("end_cursor :", end_cursor)
-            print('=======================================')
-        except:
-            end_cursor = None
-            print('엔드커서 없음')
-            return
+        end_cursor = res['data']["user"]["edge_owner_to_timeline_media"]["page_info"]["end_cursor"][:-2]
 
         # 스크롤하고 다음 페이지 주소 가져오기
         if end_cursor:
